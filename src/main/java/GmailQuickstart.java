@@ -7,13 +7,14 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.util.Base64;
+import com.google.api.client.util.StringUtils;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
-import com.google.api.services.gmail.model.Label;
-import com.google.api.services.gmail.model.ListLabelsResponse;
 import com.google.api.services.gmail.model.ListMessagesResponse;
 import com.google.api.services.gmail.model.Message;
+import com.google.api.services.gmail.model.MessagePart;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -67,15 +68,38 @@ public class GmailQuickstart {
      * @param userId User's email address. The special value "me"
      * can be used to indicate the authenticated user.
      * @param messageId ID of Message to retrieve.
-     * @return Message Retrieved Message.
      * @throws IOException
      */
-    public static void printSnnipet(Gmail service, String userId, String messageId)
+    public static void printSnippet(Gmail service, String userId, String messageId)
             throws IOException {
         Message message = service.users().messages().get(userId, messageId).execute();
 
         System.out.println("Message snippet: " + message.getSnippet());
     }
+
+    // https://stackoverflow.com/questions/29553887/gmail-apis-decoding-the-body-of-the-message-java-android
+    public static void printHtmlBody(Gmail service, String userId, String messageId)
+            throws IOException {
+
+        Message message = service.users().messages().get(userId, messageId).execute();
+
+        String mailBody = "";
+
+        String mimeType = message.getPayload().getMimeType();
+        List<MessagePart> parts = message.getPayload().getParts();
+        if (mimeType.contains("alternative")) {
+            System.out.println("entering alternative loop");
+            for (MessagePart part : parts) {
+                mailBody = new String(Base64.decodeBase64(part.getBody()
+                        .getData().getBytes()));
+
+            }
+            System.out.println(mailBody);
+        }
+
+        System.out.println("Message body: " + message.getRaw());
+    }
+
 
     public static void main(String... args) throws IOException, GeneralSecurityException
     {
@@ -86,21 +110,27 @@ public class GmailQuickstart {
                 .setApplicationName(APPLICATION_NAME)
                 .build();
 
-        // Print the labels in the user's account.
-        String user = "me";
+        // Get the authenticated user id.
+        String userId = "me";
 
-        ListMessagesResponse listMessagesResponse = service.users().messages().list(user).execute();
+        // https://stackoverflow.com/questions/29684077/get-unread-emails-from-google-api
+        // Make a request to recieve spam messages.  It could be "is:unread".
+        Gmail.Users.Messages.List request = service.users().messages().list(userId);
+        request.setQ("is:spam");
+        ListMessagesResponse listMessagesResponse = request.execute();
 
+        // Get spam messages.
         List<Message> messages = listMessagesResponse.getMessages();
 
         if (messages.isEmpty()) {
             System.out.println("No messages found.");
         }
         else {
-            System.out.println("Messages:");
+            System.out.println("spam messages:");
             for (Message message : messages)
             {
-                printSnnipet(service, user, message.getId());
+                printSnippet(service, userId, message.getId());
+                printHtmlBody(service, userId, message.getId());
             }
         }
     }
