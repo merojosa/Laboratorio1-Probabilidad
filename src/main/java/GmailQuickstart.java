@@ -12,6 +12,8 @@ import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.Label;
 import com.google.api.services.gmail.model.ListLabelsResponse;
+import com.google.api.services.gmail.model.ListMessagesResponse;
+import com.google.api.services.gmail.model.Message;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -30,7 +32,7 @@ public class GmailQuickstart {
      * Global instance of the scopes required by this quickstart.
      * If modifying these scopes, delete your previously saved tokens/ folder.
      */
-    private static final List<String> SCOPES = Collections.singletonList(GmailScopes.GMAIL_LABELS);
+    private static final List<String> SCOPES = Collections.singletonList(GmailScopes.GMAIL_READONLY);
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
     /**
@@ -58,24 +60,47 @@ public class GmailQuickstart {
         return new AuthorizationCodeInstalledApp(flow, receiver).authorize("user");
     }
 
+    /**
+     * Get Message with given ID.
+     *
+     * @param service Authorized Gmail API instance.
+     * @param userId User's email address. The special value "me"
+     * can be used to indicate the authenticated user.
+     * @param messageId ID of Message to retrieve.
+     * @return Message Retrieved Message.
+     * @throws IOException
+     */
+    public static void printSnnipet(Gmail service, String userId, String messageId)
+            throws IOException {
+        Message message = service.users().messages().get(userId, messageId).execute();
+
+        System.out.println("Message snippet: " + message.getSnippet());
+    }
+
     public static void main(String... args) throws IOException, GeneralSecurityException
     {
         // Build a new authorized API client service.
         final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+
         Gmail service = new Gmail.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
                 .setApplicationName(APPLICATION_NAME)
                 .build();
 
         // Print the labels in the user's account.
         String user = "me";
-        ListLabelsResponse listResponse = service.users().labels().list(user).execute();
-        List<Label> labels = listResponse.getLabels();
-        if (labels.isEmpty()) {
-            System.out.println("No labels found.");
-        } else {
-            System.out.println("Labels:");
-            for (Label label : labels) {
-                System.out.printf("- %s\n", label.getName());
+
+        ListMessagesResponse listMessagesResponse = service.users().messages().list(user).execute();
+
+        List<Message> messages = listMessagesResponse.getMessages();
+
+        if (messages.isEmpty()) {
+            System.out.println("No messages found.");
+        }
+        else {
+            System.out.println("Messages:");
+            for (Message message : messages)
+            {
+                printSnnipet(service, user, message.getId());
             }
         }
     }
