@@ -15,6 +15,8 @@ import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.ListMessagesResponse;
 import com.google.api.services.gmail.model.Message;
 import com.google.api.services.gmail.model.MessagePart;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -74,7 +76,7 @@ public class GmailQuickstart {
             throws IOException {
         Message message = service.users().messages().get(userId, messageId).execute();
 
-        System.out.println("Message snippet: " + message.getSnippet());
+        System.out.println("MESSAGE SNIPPET:\n" + message.getSnippet());
     }
 
     // https://stackoverflow.com/questions/29553887/gmail-apis-decoding-the-body-of-the-message-java-android
@@ -83,21 +85,22 @@ public class GmailQuickstart {
 
         Message message = service.users().messages().get(userId, messageId).execute();
 
-        String mailBody = "";
+        String mailBodyHtml = "";
 
         String mimeType = message.getPayload().getMimeType();
         List<MessagePart> parts = message.getPayload().getParts();
         if (mimeType.contains("alternative")) {
-            System.out.println("entering alternative loop");
             for (MessagePart part : parts) {
-                mailBody = new String(Base64.decodeBase64(part.getBody()
+                mailBodyHtml = new String(Base64.decodeBase64(part.getBody()
                         .getData().getBytes()));
 
             }
-            System.out.println(mailBody);
         }
 
-        System.out.println("Message body: " + message.getRaw());
+        Document doc = Jsoup.parse(mailBodyHtml);
+        String body = doc.body().text();
+
+        System.out.println("MESSAGE BODY:\n" + body);
     }
 
 
@@ -127,6 +130,7 @@ public class GmailQuickstart {
         }
         else {
             System.out.println("spam messages:");
+            // Para que volver a crear un objecto de tipo message?
             for (Message message : messages)
             {
                 printSnippet(service, userId, message.getId());
