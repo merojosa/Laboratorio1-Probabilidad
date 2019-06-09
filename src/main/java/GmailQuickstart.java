@@ -8,7 +8,6 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.Base64;
-import com.google.api.client.util.StringUtils;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
@@ -18,25 +17,33 @@ import com.google.api.services.gmail.model.MessagePart;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.security.GeneralSecurityException;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class GmailQuickstart {
-    private static final String APPLICATION_NAME = "Gmail API Java Quickstart";
-    private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
-    private static final String TOKENS_DIRECTORY_PATH = "tokens";
+    private final String APPLICATION_NAME = "Gmail API Java Quickstart";
+    private final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
+    private final String TOKENS_DIRECTORY_PATH = "tokens";
 
     /**
      * Global instance of the scopes required by this quickstart.
      * If modifying these scopes, delete your previously saved tokens/ folder.
      */
-    private static final List<String> SCOPES = Collections.singletonList(GmailScopes.GMAIL_READONLY);
-    private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
+    private final List<String> SCOPES = Collections.singletonList(GmailScopes.GMAIL_READONLY);
+    private final String CREDENTIALS_FILE_PATH = "/credentials.json";
+
+    private Hashtable<String, Integer> wordsHash;
+    private HashSet<String> stopWords;
+    private int totalWords;
+
+    public GmailQuickstart()
+    {
+        wordsHash = new Hashtable<String, Integer>();
+        stopWords = new HashSet<String>();
+        totalWords = 0;
+        initializeStopWords();
+    }
 
     /**
      * Creates an authorized Credential object.
@@ -44,7 +51,7 @@ public class GmailQuickstart {
      * @return An authorized Credential object.
      * @throws IOException If the credentials.json file cannot be found.
      */
-    private static Credential getCredentials(final NetHttpTransport HTTP_TRANSPORT) throws IOException
+    private Credential getCredentials(final NetHttpTransport HTTP_TRANSPORT) throws IOException
     {
         // Load client secrets.
         InputStream in = GmailQuickstart.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
@@ -72,7 +79,7 @@ public class GmailQuickstart {
      * @param messageId ID of Message to retrieve.
      * @throws IOException
      */
-    public static void printSnippet(Gmail service, String userId, String messageId)
+    public void printSnippet(Gmail service, String userId, String messageId)
             throws IOException {
         Message message = service.users().messages().get(userId, messageId).execute();
 
@@ -80,8 +87,9 @@ public class GmailQuickstart {
     }
 
     // https://stackoverflow.com/questions/29553887/gmail-apis-decoding-the-body-of-the-message-java-android
-    public static void printHtmlBody(Gmail service, String userId, String messageId)
-            throws IOException {
+    public String getBody(Gmail service, String userId, String messageId)
+            throws IOException
+    {
 
         Message message = service.users().messages().get(userId, messageId).execute();
 
@@ -98,13 +106,70 @@ public class GmailQuickstart {
         }
 
         Document doc = Jsoup.parse(mailBodyHtml);
-        String body = doc.body().text();
+        return doc.body().text();
 
-        System.out.println("MESSAGE BODY:\n" + body);
+    }
+
+    public void countWords(String text)
+    {
+        // Word by word, includes letters only. Regex by Jose Andres Mejias
+        for (String word : text.split("\\s+[^a-zA-z]*|[^a-zA-z]+\\s*"))
+        {
+            word = word.toLowerCase();
+
+            if(stopWords.contains(word) == false)
+            {
+                if(wordsHash.containsKey(word) == false)
+                {
+                    wordsHash.put(word, 1);
+                }
+                else
+                {
+                    wordsHash.put(word, wordsHash.get(word) + 1);
+                }
+            }
+
+            ++totalWords;
+        }
+    }
+
+    public void printWords()
+    {
+        Enumeration<String> words = wordsHash.keys();
+
+        int count = 0;
+        String word = "";
+
+        while (words.hasMoreElements())
+        {
+            word = words.nextElement();
+            count = wordsHash.get(word);
+
+            System.out.println(word + ": " + "Frecuencia: " + count + " Probabilidad: " + (float)count/(float)totalWords);
+        }
+    }
+
+    public void initializeStopWords()
+    {
+        try
+        {
+            FileReader fileReader = new FileReader("files/StopWords.txt");
+            BufferedReader bufferedReader = new BufferedReader(fileReader);
+
+            String line;
+            while ((line = bufferedReader.readLine()) != null)
+            {
+                stopWords.add(line.toLowerCase());
+            }
+        }
+        catch (IOException e)
+        {
+            System.out.println(e.getMessage());
+        }
     }
 
 
-    public static void main(String... args) throws IOException, GeneralSecurityException
+    public void start() throws IOException, GeneralSecurityException
     {
         // Build a new authorized API client service.
         final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
@@ -116,7 +181,6 @@ public class GmailQuickstart {
         // Get the authenticated user id.
         String userId = "me";
 
-        // https://stackoverflow.com/questions/29684077/get-unread-emails-from-google-api
         // Make a request to recieve spam messages.  It could be "is:unread".
         Gmail.Users.Messages.List request = service.users().messages().list(userId);
         request.setQ("is:spam");
@@ -125,17 +189,20 @@ public class GmailQuickstart {
         // Get spam messages.
         List<Message> messages = listMessagesResponse.getMessages();
 
+        String body;
+
         if (messages.isEmpty()) {
             System.out.println("No messages found.");
         }
         else {
-            System.out.println("spam messages:");
             // Para que volver a crear un objecto de tipo message?
             for (Message message : messages)
             {
-                printSnippet(service, userId, message.getId());
-                printHtmlBody(service, userId, message.getId());
+                body = getBody(service, userId, message.getId());
+                countWords(body);
             }
         }
+
+        printWords();
     }
 }
