@@ -21,7 +21,8 @@ import java.io.*;
 import java.security.GeneralSecurityException;
 import java.util.*;
 
-public class GmailQuickstart {
+public class GmailQuickstart
+{
     private final String APPLICATION_NAME = "Gmail API Java Quickstart";
     private final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
     private final String TOKENS_DIRECTORY_PATH = "tokens";
@@ -39,9 +40,17 @@ public class GmailQuickstart {
 
     public GmailQuickstart()
     {
-        wordsHash = new Hashtable<String, Integer>();
+        File file = new File("tokens/StoredCredential");
+        if(file.isFile())
+        {
+            loadWords();
+        }
+        else
+        {
+            wordsHash = new Hashtable<String, Integer>();
+            totalWords = 0;
+        }
         stopWords = new HashSet<String>();
-        totalWords = 0;
         initializeStopWords();
     }
 
@@ -97,8 +106,10 @@ public class GmailQuickstart {
 
         String mimeType = message.getPayload().getMimeType();
         List<MessagePart> parts = message.getPayload().getParts();
-        if (mimeType.contains("alternative")) {
-            for (MessagePart part : parts) {
+        if (mimeType.contains("alternative"))
+        {
+            for (MessagePart part : parts)
+            {
                 mailBodyHtml = new String(Base64.decodeBase64(part.getBody()
                         .getData().getBytes()));
 
@@ -161,6 +172,8 @@ public class GmailQuickstart {
             {
                 stopWords.add(line.toLowerCase());
             }
+
+            bufferedReader.close();
         }
         catch (IOException e)
         {
@@ -168,6 +181,58 @@ public class GmailQuickstart {
         }
     }
 
+    public void loadWords()
+    {
+        wordsHash = new Hashtable<String, Integer>();
+
+        try
+        {
+            FileReader fileReader = new FileReader("files/TrainingData.txt");
+            BufferedReader bufferedReader = new BufferedReader(fileReader);
+            String line = bufferedReader.readLine();
+            String[] data;
+            String word;
+            int count;
+            totalWords = Integer.parseInt(line);
+
+            while ((line = bufferedReader.readLine()) != null)
+            {
+                data = line.split("\\s+");
+                word = data[0];
+                count = Integer.parseInt(data[1]);
+                wordsHash.put(word, count);
+            }
+
+            bufferedReader.close();
+        }
+        catch (IOException e)
+        {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    public void saveTraining() throws IOException
+    {
+        FileWriter fileWriter = new FileWriter("files/TrainingData.txt");
+        BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
+
+        // Save total words
+        bufferedWriter.write(String.valueOf(totalWords));
+        bufferedWriter.newLine();
+
+        Enumeration<String> words = wordsHash.keys();
+
+        String word = "";
+
+        while (words.hasMoreElements())
+        {
+            word = words.nextElement();
+            bufferedWriter.write(word + " " + wordsHash.get(word));
+            bufferedWriter.newLine();
+        }
+
+        bufferedWriter.close();
+    }
 
     public void start() throws IOException, GeneralSecurityException
     {
@@ -191,15 +256,19 @@ public class GmailQuickstart {
 
         String body;
 
-        if (messages.isEmpty()) {
-            System.out.println("No messages found.");
-        }
-        else {
-            // Para que volver a crear un objecto de tipo message?
-            for (Message message : messages)
+        if(wordsHash.size() == 0)
+        {
+            if (messages.isEmpty()) {
+                System.out.println("No messages found.");
+            }
+            else
             {
-                body = getBody(service, userId, message.getId());
-                countWords(body);
+                for (Message message : messages)
+                {
+                    body = getBody(service, userId, message.getId());
+                    countWords(body);
+                }
+                saveTraining();
             }
         }
 
