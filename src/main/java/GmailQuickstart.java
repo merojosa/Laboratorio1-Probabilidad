@@ -36,7 +36,7 @@ public class GmailQuickstart
 
     private Hashtable<String, Integer> wordsHash;
     private HashSet<String> stopWords;
-    private int totalWords;
+    private int totalEmails;
 
     public GmailQuickstart()
     {
@@ -48,7 +48,7 @@ public class GmailQuickstart
         else
         {
             wordsHash = new Hashtable<String, Integer>();
-            totalWords = 0;
+            totalEmails = 0;
         }
         stopWords = new HashSet<String>();
         initializeStopWords();
@@ -123,24 +123,30 @@ public class GmailQuickstart
 
     public void countWords(String text)
     {
+        HashSet<String> wordsCounted = new HashSet<String>();
+
         // Word by word, includes letters only. Regex by Jose Andres Mejias
         for (String word : text.split("\\s+[^a-zA-z]*|[^a-zA-z]+\\s*"))
         {
             word = word.toLowerCase();
 
+            // Not include stop words.
             if(stopWords.contains(word) == false)
             {
-                if(wordsHash.containsKey(word) == false)
+                if(wordsCounted.contains(word) == false)
                 {
-                    wordsHash.put(word, 1);
-                }
-                else
-                {
-                    wordsHash.put(word, wordsHash.get(word) + 1);
+                    // To count the word once per email
+                    if(wordsHash.containsKey(word) == false)
+                    {
+                        wordsHash.put(word, 1);
+                    }
+                    else
+                    {
+                        wordsHash.put(word, wordsHash.get(word) + 1);
+                    }
+                    wordsCounted.add(word);
                 }
             }
-
-            ++totalWords;
         }
     }
 
@@ -156,7 +162,7 @@ public class GmailQuickstart
             word = words.nextElement();
             count = wordsHash.get(word);
 
-            System.out.println(word + ": " + "Frecuencia: " + count + " Probabilidad: " + (float)count/(float)totalWords);
+            System.out.println(word + ": " + "Frecuencia: " + count + " Probabilidad: " + (float)count/(float) totalEmails);
         }
     }
 
@@ -193,7 +199,7 @@ public class GmailQuickstart
             String[] data;
             String word;
             int count;
-            totalWords = Integer.parseInt(line);
+            totalEmails = Integer.parseInt(line);
 
             while ((line = bufferedReader.readLine()) != null)
             {
@@ -217,7 +223,7 @@ public class GmailQuickstart
         BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
 
         // Save total words
-        bufferedWriter.write(String.valueOf(totalWords));
+        bufferedWriter.write(String.valueOf(totalEmails));
         bufferedWriter.newLine();
 
         Enumeration<String> words = wordsHash.keys();
@@ -267,6 +273,7 @@ public class GmailQuickstart
                 {
                     body = getBody(service, userId, message.getId());
                     countWords(body);
+                    ++totalEmails;
                 }
                 saveTraining();
             }
